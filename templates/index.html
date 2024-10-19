@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio to Video</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        /* Reset default margins and paddings */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        /* Set up a minimalistic body style with vertical flow */
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: white;
+            color: black;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: center;
+            padding: 20px;
+            height: 100%;
+        }
+
+        /* Container to keep the layout centered vertically */
+        .container {
+            width: 100%;
+            max-width: 600px;
+        }
+
+        /* Headings styling */
+        h1, h2 {
+            font-weight: 600;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        /* Form elements styling for vertical flow */
+        form {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 30px;
+        }
+
+        label {
+            font-weight: 400;
+            margin-bottom: 5px;
+        }
+
+        /* Input, select, and button styles */
+        input[type="file"], input[type="number"], select {
+            padding: 10px;
+            border: 2px solid black;
+            background-color: white;
+            color: black;
+            border-radius: 0;
+            width: 100%;
+        }
+
+        /* Button styles */
+        button {
+            padding: 12px 20px;
+            background-color: black;
+            color: white;
+            border: 2px solid black;
+            border-radius: 0;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            width: 100%;
+        }
+
+        button:hover {
+            background-color: white;
+            color: black;
+        }
+
+        /* Style for audio elements */
+        audio {
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        /* Segment styling */
+        .segment {
+            margin: 20px 0;
+            padding: 15px;
+            border: 2px solid black;
+            text-align: center;
+        }
+
+        /* Progress bar styles */
+        .progress-container {
+            width: 100%;
+            margin-top: 20px;
+            border: 2px solid black;
+        }
+
+        .progress-bar {
+            width: 0;
+            height: 20px;
+            background-color: black;
+        }
+
+        /* Video preview section */
+        #video-preview {
+            margin-top: 20px;
+            width: 100%;
+        }
+
+        video {
+            width: 100%;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Create Video from Audio</h1>
+
+    <form id="audio-form" enctype="multipart/form-data">
+        <label for="audio_file">Upload Audio File:</label>
+        <input type="file" id="audio_file" name="audio_file" required>
+    
+        <!-- Silence settings -->
+        <label for="silence_thresh">Silence Threshold (dBFS):</label>
+        <input type="number" id="silence_thresh" name="silence_thresh" value="-50">
+    
+        <label for="min_silence_len">Minimum Silence Length (ms):</label>
+        <input type="number" id="min_silence_len" name="min_silence_len" value="300">
+    
+        <!-- New input for max silence length -->
+        <label for="max_silence_len">Max Silence Length (ms):</label>
+        <input type="number" id="max_silence_len" name="max_silence_len" value="500">
+    
+        <button type="submit">Upload and Analyze</button>
+    </form>    
+
+    <!-- Display Segments after Analysis -->
+    <div id="segments-container"></div>
+
+    <!-- Video Settings -->
+    <div class="settings">
+        <h2>Video Settings</h2>
+        <label for="frame_width">Frame Width (px):</label>
+        <input type="number" id="frame_width" name="frame_width" value="1200">
+
+        <label for="frame_height">Frame Height (px):</label>
+        <input type="number" id="frame_height" name="frame_height" value="1000">
+
+        <label for="zoom_type">Zoom Type:</label>
+        <select id="zoom_type" name="zoom_type">
+            <option value="zoom_in">Zoom In</option>
+            <option value="zoom_out">Zoom Out</option>
+            <option value="no_effect">No Effect</option> <!-- Added No Effect option -->
+        </select>
+
+        <button id="create_video_btn" disabled>Create Video</button>
+    </div>
+
+    <!-- Progress bar -->
+    <div class="progress-container">
+        <div class="progress-bar" id="progress-bar"></div>
+    </div>
+
+    <!-- Video preview -->
+    <div id="video-preview" style="display: none;"></div>
+
+    <script>
+        let uploadedMedia = {};  // Track uploaded media by segment
+        let segments = [];
+
+        // Handle audio upload and silence detection
+        const audioForm = document.getElementById('audio-form');
+        const segmentsContainer = document.getElementById('segments-container');
+        const createVideoBtn = document.getElementById('create_video_btn');
+        const progressBar = document.getElementById('progress-bar');
+
+        audioForm.addEventListener('submit', function(event) {
+            event.preventDefault();
+            const formData = new FormData(audioForm);
+
+            fetch('/upload_audio', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                segmentsContainer.innerHTML = '';
+                if (data.error) {
+                    alert(data.error);
+                    return;
+                }
+
+                segments = data.segments;
+
+                // Display audio segments with media upload forms
+                segments.forEach(segment => {
+                    const segmentDiv = document.createElement('div');
+                    segmentDiv.className = 'segment';
+                    segmentDiv.innerHTML = `
+                        <h3>Segment ${segment.index}: ${segment.start} ms - ${segment.end} ms</h3>
+                        <audio controls>
+                            <source src="${segment.filepath}" type="audio/mp3">
+                        </audio>
+                        <form class="media-upload-form" enctype="multipart/form-data">
+                            <input type="file" name="media_file" required>
+                            <input type="hidden" name="segment_id" value="${segment.index}">
+                            <button type="submit">Upload Media</button>
+                        </form>
+                        <p id="status_${segment.index}"></p>
+                    `;
+                    segmentsContainer.appendChild(segmentDiv);
+
+                    const form = segmentDiv.querySelector('.media-upload-form');
+                    form.addEventListener('submit', function(event) {
+                        event.preventDefault();
+                        const formData = new FormData(form);
+                        fetch('/upload_media', {
+                            method: 'POST',
+                            body: formData
+                        }).then(response => response.json())
+                          .then(data => {
+                              if (data.error) {
+                                  alert(data.error);
+                              } else {
+                                  uploadedMedia[segment.index] = data.file_path;
+                                  document.getElementById(`status_${segment.index}`).textContent = 'Media Uploaded';
+
+                                  if (Object.keys(uploadedMedia).length === segments.length) {
+                                      createVideoBtn.disabled = false;
+                                  }
+                              }
+                          });
+                    });
+                });
+            })
+            .catch(err => {
+                console.error('Error uploading audio:', err);
+            });
+        });
+
+        createVideoBtn.addEventListener('click', function() {
+            const frameWidth = document.getElementById('frame_width').value;
+            const frameHeight = document.getElementById('frame_height').value;
+            const zoomType = document.getElementById('zoom_type').value;
+
+            const videoSettings = {
+                frame_width: frameWidth,
+                frame_height: frameHeight,
+                zoom_type: zoomType
+            };
+
+            // Update progress bar while creating the video
+            progressBar.style.width = '0%';
+            let progress = 0;
+
+            const interval = setInterval(() => {
+                progress += 10;
+                progressBar.style.width = progress + '%';
+                if (progress >= 100) clearInterval(interval);
+            }, 1000);
+
+            fetch('/create_video', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(videoSettings)
+            }).then(response => response.json())
+              .then(data => {
+                  clearInterval(interval);
+                  progressBar.style.width = '100%';
+                  if (data.error) {
+                      alert(data.error);
+                  } else {
+                      const videoPreview = document.getElementById('video-preview');
+                      videoPreview.innerHTML = `
+                          <h2>Video Preview</h2>
+                          <video controls>
+                              <source src="${data.video_url}" type="video/mp4">
+                          </video>
+                          <a href="${data.video_url}" download>Download Video</a>
+                      `;
+                      videoPreview.style.display = 'block';
+                  }
+              });
+        });
+    </script>
+</body>
+</html>
