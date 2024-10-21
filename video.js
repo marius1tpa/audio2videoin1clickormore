@@ -7,10 +7,12 @@ const frameWidth = parseInt(process.argv[2]);
 const frameHeight = parseInt(process.argv[3]);
 const zoomType = process.argv[4];
 
-const audioFolder = path.join(__dirname, 'segments');
-const mediaFolder = path.join(__dirname, 'vids');
-const outputFolder = path.join(__dirname, 'output-videos');
-const videoSegmentsFolder = path.join(__dirname, 'vid-segments');
+// Updated paths for the media directories
+const mediaRoot = path.join(__dirname, 'web-media');
+const audioFolder = path.join(mediaRoot, 'segments');
+const mediaFolder = path.join(mediaRoot, 'vids');
+const outputFolder = path.join(mediaRoot, 'output-videos');
+const videoSegmentsFolder = path.join(mediaRoot, 'vid-segments');
 
 const targetFrameRate = 60;
 const videoBitrate = '3000k';  // Increased bitrate for better quality
@@ -30,6 +32,9 @@ const mediaFiles = fs.readdirSync(mediaFolder)
         }
         return acc;
     }, {});
+
+// All the other logic remains the same...
+
 
 // Logging FFmpeg errors and providing detailed error logs
 function logFfmpegError(error, stage) {

@@ -6,14 +6,12 @@
     <title>Audio to Video</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
     <style>
-        /* Reset default margins and paddings */
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
 
-        /* Set up a minimalistic body style with vertical flow */
         body {
             font-family: 'Poppins', sans-serif;
             background-color: white;
@@ -26,20 +24,17 @@
             height: 100%;
         }
 
-        /* Container to keep the layout centered vertically */
         .container {
             width: 100%;
             max-width: 600px;
         }
 
-        /* Headings styling */
         h1, h2 {
             font-weight: 600;
             text-align: center;
             margin-bottom: 20px;
         }
 
-        /* Form elements styling for vertical flow */
         form {
             display: flex;
             flex-direction: column;
@@ -52,7 +47,6 @@
             margin-bottom: 5px;
         }
 
-        /* Input, select, and button styles */
         input[type="file"], input[type="number"], select {
             padding: 10px;
             border: 2px solid black;
@@ -62,7 +56,6 @@
             width: 100%;
         }
 
-        /* Button styles */
         button {
             padding: 12px 20px;
             background-color: black;
@@ -79,13 +72,11 @@
             color: black;
         }
 
-        /* Style for audio elements */
         audio {
             width: 100%;
             margin-top: 10px;
         }
 
-        /* Segment styling */
         .segment {
             margin: 20px 0;
             padding: 15px;
@@ -93,7 +84,6 @@
             text-align: center;
         }
 
-        /* Progress bar styles */
         .progress-container {
             width: 100%;
             margin-top: 20px;
@@ -106,7 +96,6 @@
             background-color: black;
         }
 
-        /* Video preview section */
         #video-preview {
             margin-top: 20px;
             width: 100%;
@@ -116,7 +105,6 @@
             width: 100%;
         }
 
-        /* Responsive adjustments */
         @media (max-width: 768px) {
             .container {
                 padding: 10px;
@@ -127,7 +115,9 @@
 <body>
     <h1>Create Video from Audio</h1>
 
+    <!-- Audio Upload Form -->
     <form id="audio-form" enctype="multipart/form-data">
+        <h2>Step 1: Upload Audio File</h2>
         <label for="audio_file">Upload Audio File:</label>
         <input type="file" id="audio_file" name="audio_file" required>
     
@@ -138,19 +128,37 @@
         <label for="min_silence_len">Minimum Silence Length (ms):</label>
         <input type="number" id="min_silence_len" name="min_silence_len" value="300">
     
-        <!-- New input for max silence length -->
         <label for="max_silence_len">Max Silence Length (ms):</label>
         <input type="number" id="max_silence_len" name="max_silence_len" value="500">
     
-        <button type="submit">Upload and Analyze</button>
+        <button type="submit">Upload and Analyze Audio</button>
     </form>    
 
-    <!-- Display Segments after Analysis -->
-    <div id="segments-container"></div>
+    <!-- Step 2: Choose Upload Type (Single/Bulk) -->
+    <div id="upload-choice" style="display: none;">
+        <h2>Step 2: Choose Upload Type</h2>
+        <button id="single-upload-btn">Single Upload</button>
+        <button id="bulk-upload-btn">Bulk Upload</button>
+    </div>
+
+    <!-- Form for Single Upload (Hidden Initially) -->
+    <form id="single-upload-form" enctype="multipart/form-data" style="display: none;">
+        <h2>Single Upload</h2>
+        <div id="segments-container"></div>
+    </form>
+
+    <!-- Form for Bulk Upload (Hidden Initially) -->
+    <form id="bulk-upload-form" enctype="multipart/form-data" style="display: none;">
+        <h2>Bulk Upload</h2>
+        <label for="bulk_media_files">Upload Multiple Media Files:</label>
+        <input type="file" id="bulk_media_files" name="media_files" multiple required>
+        <button type="submit">Upload Media Files</button>
+        <div id="bulk-upload-status" style="margin-top: 20px;"></div>
+    </form>
 
     <!-- Video Settings -->
-    <div class="settings">
-        <h2>Video Settings</h2>
+    <div class="settings" id="video-settings" style="display:none;">
+        <h2>Step 3: Video Settings</h2>
         <label for="frame_width">Frame Width (px):</label>
         <input type="number" id="frame_width" name="frame_width" value="1200">
 
@@ -161,14 +169,14 @@
         <select id="zoom_type" name="zoom_type">
             <option value="zoom_in">Zoom In</option>
             <option value="zoom_out">Zoom Out</option>
-            <option value="no_effect">No Effect</option> <!-- Added No Effect option -->
+            <option value="no_effect">No Effect</option>
         </select>
 
         <button id="create_video_btn" disabled>Create Video</button>
     </div>
 
     <!-- Progress bar -->
-    <div class="progress-container">
+    <div class="progress-container" style="display:none;">
         <div class="progress-bar" id="progress-bar"></div>
     </div>
 
@@ -178,13 +186,19 @@
     <script>
         let uploadedMedia = {};  // Track uploaded media by segment
         let segments = [];
+        let totalAudioDurationNeeded = 0; // Track audio duration needed for segments
 
-        // Handle audio upload and silence detection
         const audioForm = document.getElementById('audio-form');
         const segmentsContainer = document.getElementById('segments-container');
+        const uploadChoiceDiv = document.getElementById('upload-choice');
+        const singleUploadForm = document.getElementById('single-upload-form');
+        const bulkUploadForm = document.getElementById('bulk-upload-form');
         const createVideoBtn = document.getElementById('create_video_btn');
         const progressBar = document.getElementById('progress-bar');
+        const bulkUploadStatus = document.getElementById('bulk-upload-status');
+        const videoSettingsDiv = document.getElementById('video-settings');
 
+        // Handle audio upload and silence detection
         audioForm.addEventListener('submit', function(event) {
             event.preventDefault();
             const formData = new FormData(audioForm);
@@ -195,60 +209,110 @@
             })
             .then(response => response.json())
             .then(data => {
-                segmentsContainer.innerHTML = '';
                 if (data.error) {
                     alert(data.error);
                     return;
                 }
 
                 segments = data.segments;
-
-                // Display audio segments with media upload forms
-                segments.forEach(segment => {
-                    const segmentDiv = document.createElement('div');
-                    segmentDiv.className = 'segment';
-                    segmentDiv.innerHTML = `
-                        <h3>Segment ${segment.index}: ${segment.start} ms - ${segment.end} ms</h3>
-                        <audio controls>
-                            <source src="${segment.filepath}" type="audio/mp3">
-                        </audio>
-                        <form class="media-upload-form" enctype="multipart/form-data">
-                            <input type="file" name="media_file" required>
-                            <input type="hidden" name="segment_id" value="${segment.index}">
-                            <button type="submit">Upload Media</button>
-                        </form>
-                        <p id="status_${segment.index}"></p>
-                    `;
-                    segmentsContainer.appendChild(segmentDiv);
-
-                    const form = segmentDiv.querySelector('.media-upload-form');
-                    form.addEventListener('submit', function(event) {
-                        event.preventDefault();
-                        const formData = new FormData(form);
-                        fetch('/upload_media', {
-                            method: 'POST',
-                            body: formData
-                        }).then(response => response.json())
-                          .then(data => {
-                              if (data.error) {
-                                  alert(data.error);
-                              } else {
-                                  uploadedMedia[segment.index] = data.file_path;
-                                  document.getElementById(`status_${segment.index}`).textContent = 'Media Uploaded';
-
-                                  if (Object.keys(uploadedMedia).length === segments.length) {
-                                      createVideoBtn.disabled = false;
-                                  }
-                              }
-                          });
-                    });
-                });
+                totalAudioDurationNeeded = data.trimmed_duration;
+                uploadChoiceDiv.style.display = 'block'; // Show the choice for Single or Bulk Upload
             })
             .catch(err => {
                 console.error('Error uploading audio:', err);
             });
         });
 
+        // Handle Single Upload Button Click
+        document.getElementById('single-upload-btn').addEventListener('click', function() {
+            bulkUploadForm.style.display = 'none';
+            singleUploadForm.style.display = 'block';
+            displaySingleUploadSegments();
+        });
+
+        // Handle Bulk Upload Button Click
+        document.getElementById('bulk-upload-btn').addEventListener('click', function() {
+            singleUploadForm.style.display = 'none';
+            bulkUploadForm.style.display = 'block';
+        });
+
+        // Display segments for Single Upload
+        function displaySingleUploadSegments() {
+            segmentsContainer.innerHTML = '';
+
+            segments.forEach(segment => {
+                const segmentDiv = document.createElement('div');
+                segmentDiv.className = 'segment';
+                segmentDiv.innerHTML = `
+                    <h3>Segment ${segment.index}: ${segment.start} ms - ${segment.end} ms</h3>
+                    <audio controls>
+                        <source src="${segment.filepath}" type="audio/mp3">
+                    </audio>
+                    <form class="media-upload-form" enctype="multipart/form-data">
+                        <input type="file" name="media_file" accept="image/*,video/*,.gif" required>
+                        <input type="hidden" name="segment_id" value="${segment.index}">
+                        <button type="submit">Upload Media</button>
+                    </form>
+                    <p id="status_${segment.index}"></p>
+                `;
+                segmentsContainer.appendChild(segmentDiv);
+
+                const form = segmentDiv.querySelector('.media-upload-form');
+                form.addEventListener('submit', function(event) {
+                    event.preventDefault();
+                    const formData = new FormData(form);
+                    fetch('/upload_media', {
+                        method: 'POST',
+                        body: formData
+                    }).then(response => response.json())
+                    .then(data => {
+                        if (data.error) {
+                            alert(data.error);
+                        } else {
+                            uploadedMedia[segment.index] = data.file_path;
+                            document.getElementById(`status_${segment.index}`).textContent = 'Media Uploaded';
+
+                            if (Object.keys(uploadedMedia).length === segments.length) {
+                                createVideoBtn.disabled = false;
+                                videoSettingsDiv.style.display = 'block'; // Show the video settings
+                            }
+                        }
+                    });
+                });
+            });
+        }
+
+        // Handle Bulk Upload
+        bulkUploadForm.addEventListener('submit', function(event) {
+            event.preventDefault();
+            const formData = new FormData(bulkUploadForm);
+
+            fetch('/upload_bulk_media', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert(data.error);
+                } else {
+                    bulkUploadStatus.innerHTML = `Uploaded ${data.total_files_used} media files.`;
+
+                    if (data.total_files_used >= segments.length) {
+                        createVideoBtn.disabled = false;
+                        videoSettingsDiv.style.display = 'block'; // Show the video settings
+                    } else {
+                        const remaining = segments.length - data.total_files_used;
+                        bulkUploadStatus.innerHTML += `<p>You still need to upload ${remaining} more files.</p>`;
+                    }
+                }
+            })
+            .catch(err => {
+                console.error('Error uploading bulk media files:', err);
+            });
+        });
+
+        // Handle Create Video Button Click
         createVideoBtn.addEventListener('click', function() {
             const frameWidth = document.getElementById('frame_width').value;
             const frameHeight = document.getElementById('frame_height').value;
@@ -260,7 +324,6 @@
                 zoom_type: zoomType
             };
 
-            // Update progress bar while creating the video
             progressBar.style.width = '0%';
             let progress = 0;
 
@@ -277,23 +340,23 @@
                 },
                 body: JSON.stringify(videoSettings)
             }).then(response => response.json())
-              .then(data => {
-                  clearInterval(interval);
-                  progressBar.style.width = '100%';
-                  if (data.error) {
-                      alert(data.error);
-                  } else {
-                      const videoPreview = document.getElementById('video-preview');
-                      videoPreview.innerHTML = `
-                          <h2>Video Preview</h2>
-                          <video controls>
-                              <source src="${data.video_url}" type="video/mp4">
-                          </video>
-                          <a href="${data.video_url}" download>Download Video</a>
-                      `;
-                      videoPreview.style.display = 'block';
-                  }
-              });
+            .then(data => {
+                clearInterval(interval);
+                progressBar.style.width = '100%';
+                if (data.error) {
+                    alert(data.error);
+                } else {
+                    const videoPreview = document.getElementById('video-preview');
+                    videoPreview.innerHTML = `
+                        <h2>Video Preview</h2>
+                        <video controls>
+                            <source src="${data.video_url}" type="video/mp4">
+                        </video>
+                        <a href="${data.video_url}" download>Download Video</a>
+                    `;
+                    videoPreview.style.display = 'block';
+                }
+            });
         });
     </script>
 </body>
